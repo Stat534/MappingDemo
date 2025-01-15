@@ -1,0 +1,253 @@
+---
+title: "Mapping Demo"
+format: html
+editor: visual
+---
+
+#### Leaflet
+
+The `htmlwidgets` package allows you to embed interactive leaflet maps in html-based quarto documents.
+
+```{r}
+#| message: FALSE
+library(htmlwidgets)
+library(tidyverse)
+library(leaflet)
+library(sf)
+```
+
+### Interactive Leaflet Plots
+
+```{r}
+leaflet() |>
+  addTiles() |> setView(-111.05, 45.67, zoom = 17)
+```
+
+```{r}
+leaflet() |>
+  addTiles() |>
+  addPopups(-111.048, 45.66845, 'Here is our classroom')
+
+```
+
+### Using a dataset (Point Process Data)
+
+```{r}
+#| message: FALSE
+set.seed(1019024)
+df <- tibble(Long = runif(10, max = -111, min = -111.5), 
+             Lat = runif(10, min = 45.5, max = 46),
+             size = runif(10, 5, 20),
+             color = sample(colors(), 10))
+leaflet(df) |>
+  addTiles() |> 
+  addCircles(lng = ~Long, lat = ~Lat, color = 'maroon')
+
+
+```
+
+### Map Choropleths (Areal Data)
+
+```{r}
+library(maps)
+mapStates <- map("state", fill = TRUE, plot = FALSE)
+class(mapStates)
+#mapStates
+```
+
+- __Q:__ what type of object is `mapStates`?
+
+```{r}
+leaflet(data = mapStates) %>%
+  addTiles() %>%
+  addPolygons(fillColor = topo.colors(10, alpha = NULL), stroke = FALSE)
+```
+
+```{r}
+mt <- map("county",'montana', fill = TRUE, plot = FALSE)
+leaflet(mt) %>%
+  addTiles() %>%
+  addPolygons(fillColor = viridis::rocket(10), stroke = FALSE)
+```
+
+### Choropleth from RStudio help files
+
+```{r, warning=FALSE}
+
+# From https://leafletjs.com/examples/choropleth/us-states.js
+states <- sf::read_sf("https://rstudio.github.io/leaflet/json/us-states.geojson")
+
+bins <- c(0, 10, 20, 50, 100, 200, 500, 1000, Inf)
+pal <- colorBin("YlOrRd", domain = states$density, bins = bins)
+
+labels <- sprintf(
+  "<strong>%s</strong><br/>%g people / mi<sup>2</sup>",
+  states$name, states$density
+) %>% lapply(htmltools::HTML)
+
+leaflet(states) %>%
+  setView(-96, 37.8, 4) %>%
+  # addProviderTiles("MapBox", options = providerTileOptions(
+  #   id = "mapbox.light",
+  #   accessToken = Sys.getenv('MAPBOX_ACCESS_TOKEN'))) %>%
+  addPolygons(
+    fillColor = ~pal(density),
+    weight = 2,
+    opacity = 1,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 5,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = labels,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto")) %>%
+  addLegend(pal = pal, values = ~density, opacity = 0.7, title = NULL,
+    position = "bottomright")
+```
+
+### Demo Questions
+
+```{r}
+seattle <- read_csv('http://math.montana.edu/ahoegh/teaching/stat408/datasets/Seattle_911_062016.csv')
+```
+
+1.  Create a leaflet map with the locations of auto thefts. Use the addMarker function().
+
+
+
+2.Create a palette that maps crime type to colors. Hint: use `addCircleMarkers`
+
+
+
+3.  Explore the `markerClusterOptions()` feature in leaflet
+
+
+#### GGMaps
+
+```{r}
+library(ggmap)
+library(tidyverse)
+library(maps)
+library(viridis)
+library(shiny)
+library(knitr)
+```
+
+Creating static maps in R, which ggplot, requires downloading map layers.
+
+## 1. Downloading Map Layers
+
+### ggmap
+
+ggmap is a nice way to download map layers, including satellite images. Unfortunately, `ggmap` now requires a Google Maps API key. The `get_map()` function relies on Google to draw the appropriate map. The API is free up to a reasonable limit, but then does end up costing. To get the key, you'll have to enter credit card information. I do this for my own work, but we will avoid that for classroom examples. If you'd like high resolution base layers for your project, look into this option.
+
+```{r}
+#| error: TRUE
+library(ggmap)
+
+bozo_map <- get_map(location = 'bozeman')
+```
+
+### maps
+
+As we saw with leaflet, we can use the `maps` package to download maps too. There are county, state, and country level maps for the US as well as a few other countries.
+
+```{r}
+mt <- map_data("county", "montana")
+head(mt)
+```
+
+```{r}
+centroids <- mt |>
+  group_by(subregion) |>
+  summarize(lat = mean(lat), 
+            long = mean(long))
+
+wilson_hall <- tibble(long = -111.048, lat = 45.66845)
+
+mt |>
+  ggplot( aes(x = long, y = lat)) +
+  geom_polygon(aes(group = group), fill = NA, colour = "grey60") +
+  theme_minimal() +
+  geom_text(aes(label = subregion), data = centroids, size = 2, angle = 45) +
+  geom_point(data = wilson_hall, color = 'navy') +
+  coord_quickmap() +
+  xlab('') +
+  ylab('')
+
+```
+
+```{r}
+centroids <- mt |>
+  group_by(subregion) |>
+  summarize(lat = mean(lat), 
+            long = mean(long))
+
+wilson_hall <- tibble(long = -111.048, lat = 45.66845)
+
+mt |> filter(subregion %in% c('gallatin', 'park', 'madison')) |>
+  ggplot( aes(x = long, y = lat)) +
+  geom_polygon(aes(group = group), fill = NA, colour = "grey60") +
+  theme_minimal() +
+  geom_text(aes(label = subregion), 
+            data = centroids |> 
+              filter(subregion %in% c('gallatin', 'park', 'madison')),
+            size = 2, angle = 45) +
+  geom_point(data = wilson_hall, color = 'navy') +
+  coord_quickmap() +
+  xlab('') +
+  ylab('')
+```
+
+```{r}
+data(us.cities)
+head(us.cities)
+us.cities |>
+  filter(country.etc == 'MT') |> 
+  ggplot(aes(long, lat)) +
+    borders("county", 'montana') +
+    geom_point(aes(size = pop)) +
+    scale_size_area() +
+    coord_quickmap() 
+```
+
+```{r}
+mt_income <- read_csv('https://raw.githubusercontent.com/stat408/Data/refs/heads/main/MT_Income.csv'); mt_income
+```
+
+### Activity 1. 
+Use the MT income dataset to create a choropleth with county population Montana. Do the same for Income
+
+
+
+---
+
+```{r}
+seattle <- read_csv('http://math.montana.edu/ahoegh/teaching/stat408/datasets/Seattle_911_062016.csv') 
+  
+wa <- map_data("county", "Washington")
+head(wa)
+
+wa |> filter(subregion %in% c('king')) |>
+  ggplot( aes(x = long, y = lat)) +
+  geom_polygon(aes(group = group), fill = NA, colour = "grey60") +
+  theme_minimal() +
+  geom_point(data = seattle |> rename(lat = Latitude, long = Longitude), color = 'navy') +
+  coord_quickmap() +
+  xlab('') +
+  ylab('')
+```
+
+### Activity 2
+
+2. Explore the `geom_density2d` and `geom_density_2d_filled` functions with the seattle 911 calls.
+
+
+
